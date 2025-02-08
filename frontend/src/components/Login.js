@@ -2,25 +2,28 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Box, Container, TextField, Button, Typography, Paper } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import { login, verifyOtp } from '../services/api';
 
 function Login() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
-    password: ''
+    password: '',
+    otp: ''
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [showOtpField, setShowOtpField] = useState(false);
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.email) {
       newErrors.email = 'Email is required';
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email is invalid';
     }
-    
+
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
@@ -48,32 +51,38 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
 
     setIsLoading(true);
     try {
-      // API call example
-      const response = await fetch('/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        // Store token in localStorage or state management solution
-        localStorage.setItem('token', data.token);
-        navigate('/dashboard'); // Redirect to dashboard
-      } else {
-        setErrors({
-          submit: data.message || 'Login failed'
+      if (!showOtpField) {
+        // First step: Login with email/password
+        const response = await login({
+          email: formData.email,
+          password: formData.password
         });
+
+        if (response.message === 'OTP sent to email') {
+          setShowOtpField(true);
+          setErrors({});
+        } else {
+          setErrors({ submit: response.error || 'Login failed' });
+        }
+      } else {
+        // Second step: Verify OTP
+        const response = await verifyOtp({
+          email: formData.email,
+          otp: formData.otp
+        });
+
+        if (response.message === 'Login successful') {
+          navigate('/dashboard');
+        } else {
+          setErrors({ submit: response.error || 'OTP verification failed' });
+        }
       }
     } catch (error) {
       setErrors({
@@ -124,21 +133,37 @@ function Login() {
               error={!!errors.email}
               helperText={errors.email}
             />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="password"
-              label="Password"
-              type="password"
-              id="password"
-              autoComplete="current-password"
-              variant="outlined"
-              value={formData.password}
-              onChange={handleChange}
-              error={!!errors.password}
-              helperText={errors.password}
-            />
+            {!showOtpField ? (
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                name="password"
+                label="Password"
+                type="password"
+                id="password"
+                autoComplete="current-password"
+                variant="outlined"
+                value={formData.password}
+                onChange={handleChange}
+                error={!!errors.password}
+                helperText={errors.password}
+              />
+            ) : (
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                name="otp"
+                label="Enter OTP"
+                type="text"
+                id="otp"
+                value={formData.otp}
+                onChange={handleChange}
+                error={!!errors.otp}
+                helperText={errors.otp}
+              />
+            )}
             <Button
               type="submit"
               fullWidth

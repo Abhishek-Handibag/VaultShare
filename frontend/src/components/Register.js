@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Box, Container, TextField, Button, Typography, Paper } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
+import { register } from '../services/api';
 
 function Register() {
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ function Register() {
 
   const validateForm = () => {
     const newErrors = {};
-    
+
     if (!formData.name) {
       newErrors.name = 'Name is required';
     }
@@ -26,7 +27,7 @@ function Register() {
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
       newErrors.email = 'Email is invalid';
     }
-    
+
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 6) {
@@ -58,29 +59,21 @@ function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!validateForm()) {
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsLoading(true);
     try {
-      // API call example
-      const response = await fetch('/api/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
+      const response = await register({
+        email: formData.email,
+        password: formData.password,
+        name: formData.name
       });
 
-      const data = await response.json();
-
-      if (response.ok) {
-        navigate('/'); // Redirect to login
+      if (response.message === 'Registration successful') {
+        navigate('/');
       } else {
         setErrors({
-          submit: data.message || 'Registration failed'
+          submit: response.error || 'Registration failed'
         });
       }
     } catch (error) {
