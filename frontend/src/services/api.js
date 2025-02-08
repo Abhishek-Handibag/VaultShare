@@ -1,11 +1,59 @@
+import {
+    setLoading,
+    setAuthenticated,
+    setNotAuthenticated,
+    setError,
+    setOtpRequired
+} from '../store/authSlice';
+import { createAsyncThunk } from '@reduxjs/toolkit';
+
 const API_BASE_URL = 'http://localhost:8000';
+
+// Add authorization header helper
+const getAuthHeaders = () => {
+    const headers = {
+        'Content-Type': 'application/json',
+    };
+    const token = document.cookie.split('; ').find(row => row.startsWith('access_token='));
+    if (token) {
+        headers['Authorization'] = `Bearer ${token.split('=')[1]}`;
+    }
+
+    // Add CSRF token for non-GET requests
+    const csrfToken = getCSRFToken();
+    if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+    }
+
+    return headers;
+};
+
+// Add this helper function to get CSRF token
+const getCSRFToken = () => {
+    const name = 'csrftoken';
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+};
+
+const defaultOptions = {
+    credentials: 'include',  // This is important for cookies
+    headers: getAuthHeaders(),
+};
 
 export const register = async (userData) => {
     const response = await fetch(`${API_BASE_URL}/register/`, {
+        ...defaultOptions,
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
         body: JSON.stringify(userData),
     });
     return response.json();
@@ -13,10 +61,8 @@ export const register = async (userData) => {
 
 export const login = async (credentials) => {
     const response = await fetch(`${API_BASE_URL}/login/`, {
+        ...defaultOptions,
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
         body: JSON.stringify(credentials),
     });
     return response.json();
@@ -24,10 +70,8 @@ export const login = async (credentials) => {
 
 export const verifyOtp = async (data) => {
     const response = await fetch(`${API_BASE_URL}/verify-otp/`, {
+        ...defaultOptions,
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
         body: JSON.stringify(data),
     });
     return response.json();
@@ -35,10 +79,8 @@ export const verifyOtp = async (data) => {
 
 export const forgotPassword = async (data) => {
     const response = await fetch(`${API_BASE_URL}/forgot-password/`, {
+        ...defaultOptions,
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
         body: JSON.stringify(data),
     });
     return response.json();
@@ -46,11 +88,113 @@ export const forgotPassword = async (data) => {
 
 export const resetPassword = async (data) => {
     const response = await fetch(`${API_BASE_URL}/reset-password/`, {
+        ...defaultOptions,
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
         body: JSON.stringify(data),
     });
     return response.json();
 };
+
+export const verifyAuth = async () => {
+    const response = await fetch(`${API_BASE_URL}/verify-auth/`, {
+        ...defaultOptions,
+        method: 'GET',
+    });
+    return response.json();
+};
+
+export const logout = async () => {
+    const response = await fetch(`${API_BASE_URL}/logout/`, {
+        ...defaultOptions,
+        method: 'POST',
+    });
+    return response.json();
+};
+
+export const uploadFile = async (formData) => {
+    const headers = getAuthHeaders();
+    delete headers['Content-Type']; // Remove Content-Type for FormData
+    const csrfToken = getCSRFToken();
+    if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/upload-file/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: formData,
+    });
+    return response.json();
+};
+
+export const downloadFile = async (fileId, password) => {
+    const response = await fetch(`${API_BASE_URL}/download-file/${fileId}/?password=${password}`, {
+        credentials: 'include',
+        headers: getAuthHeaders(),
+    });
+    return response;
+};
+
+export const listFiles = async () => {
+    const response = await fetch(`${API_BASE_URL}/list-files/`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: getAuthHeaders(),
+    });
+    return response.json();
+};
+
+export const loginThunk = createAsyncThunk(
+    'auth/login',
+    async (credentials, { dispatch }) => {
+        dispatch(setLoading());
+        try {
+            const response = await login(credentials);
+            if (response.message === 'OTP sent to email') {
+                dispatch(setOtpRequired());
+            } else if (response.error) {
+                dispatch(setError(response.error));
+            }
+            return response;
+        } catch (error) {
+            dispatch(setError('Network error occurred'));
+            throw error;
+        }
+    }
+);
+
+export const verifyOtpThunk = createAsyncThunk(
+    'auth/verifyOtp',
+    async (data, { dispatch }) => {
+        dispatch(setLoading());
+        try {
+            const response = await verifyOtp(data);
+            if (response.message === 'Login successful' || response.user) {
+                // If we have a user object, use it, otherwise create a basic user object
+                const user = response.user || { email: data.email };
+                dispatch(setAuthenticated(user));
+                return { success: true, user };
+            } else {
+                dispatch(setError(response.error || 'OTP verification failed'));
+                return { success: false, error: response.error };
+            }
+        } catch (error) {
+            dispatch(setError('Network error occurred'));
+            throw error;
+        }
+    }
+);
+
+export const logoutThunk = createAsyncThunk(
+    'auth/logout',
+    async (_, { dispatch }) => {
+        try {
+            await logout();
+            dispatch(setNotAuthenticated());
+        } catch (error) {
+            console.error('Logout failed:', error);
+            throw error;
+        }
+    }
+);

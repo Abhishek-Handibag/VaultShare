@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Box, Container, TextField, Button, Typography, Paper } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
-import { login, verifyOtp } from '../services/api';
+import { useDispatch, useSelector } from 'react-redux';
+import { loginThunk, verifyOtpThunk } from '../services/api';
 
 function Login() {
+  const dispatch = useDispatch();
+  const { error, otpRequired, status } = useSelector(state => state.auth);
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     email: '',
@@ -51,42 +54,33 @@ function Login() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!validateForm()) return;
 
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsLoading(true);
     try {
+      setIsLoading(true);
       if (!showOtpField) {
-        // First step: Login with email/password
-        const response = await login({
+        const result = await dispatch(loginThunk({
           email: formData.email,
           password: formData.password
-        });
+        })).unwrap();
 
-        if (response.message === 'OTP sent to email') {
+        if (result.message === 'OTP sent to email') {
           setShowOtpField(true);
           setErrors({});
-        } else {
-          setErrors({ submit: response.error || 'Login failed' });
         }
       } else {
-        // Second step: Verify OTP
-        const response = await verifyOtp({
+        const result = await dispatch(verifyOtpThunk({
           email: formData.email,
           otp: formData.otp
-        });
+        })).unwrap();
 
-        if (response.message === 'Login successful') {
+        if (result.success) {
           navigate('/dashboard');
-        } else {
-          setErrors({ submit: response.error || 'OTP verification failed' });
         }
       }
     } catch (error) {
       setErrors({
-        submit: 'Network error occurred'
+        submit: error.message || 'Network error occurred'
       });
     } finally {
       setIsLoading(false);
