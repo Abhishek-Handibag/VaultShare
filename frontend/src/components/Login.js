@@ -184,6 +184,11 @@ function Login() {
                 Sign Up
               </Link>
             </Typography>
+            <Typography variant="body2" align="center" sx={{ mt: 1 }}>
+              <Link to="/forgot-password" style={{ color: '#2196f3' }}>
+                Forgot Password?
+              </Link>
+            </Typography>
           </Box>
         </Paper>
       </Box>
