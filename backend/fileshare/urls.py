@@ -13,4 +13,9 @@ urlpatterns = [
     path('upload-file/', views.upload_file, name='upload_file'),
     path('download-file/<int:file_id>/', views.download_file, name='download_file'),
     path('list-files/', views.list_files, name='list_files'),
+    path('share-file/<int:file_id>/', views.share_file, name='share_file'),
+    path('create-share-link/<int:file_id>/', views.create_share_link, name='create_share_link'),
+    path('shared/<uuid:token>/', views.access_shared_file, name='access_shared_file'),
+    path('shared-files/', views.list_shared_files, name='list_shared_files'),
+    path('delete-file/<int:file_id>/', views.delete_file, name='delete_file'),
 ]

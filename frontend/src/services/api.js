@@ -145,6 +145,62 @@ export const listFiles = async () => {
     return response.json();
 };
 
+export const shareFile = async (fileId, email, permission) => {
+    const response = await fetch(`${API_BASE_URL}/share-file/${fileId}/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ email, permission })
+    });
+    return response.json();
+};
+
+export const createShareLink = async (fileId, expiryHours) => {
+    const response = await fetch(`${API_BASE_URL}/create-share-link/${fileId}/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ expiry_hours: expiryHours })
+    });
+    return response.json();
+};
+
+export const listSharedFiles = async () => {
+    const response = await fetch(`${API_BASE_URL}/shared-files/`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: getAuthHeaders(),
+    });
+    return response.json();
+};
+
+export const getSharedFile = async (token, password = '') => {
+    const response = await fetch(`${API_BASE_URL}/shared/${token}/${password ? `?password=${password}` : ''}`, {
+        credentials: 'include',
+        headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to fetch file');
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (contentType?.includes('application/json')) {
+        return response.json();
+    }
+    return response;
+};
+
+export const deleteFile = async (fileId) => {
+    const response = await fetch(`${API_BASE_URL}/delete-file/${fileId}/`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: getAuthHeaders(),
+    });
+    return response.json();
+};
+
 export const loginThunk = createAsyncThunk(
     'auth/login',
     async (credentials, { dispatch }) => {

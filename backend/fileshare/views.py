@@ -18,6 +18,8 @@ from .models import File
 from .crypto_utils import generate_key, encrypt_file, decrypt_file, encrypt_key, decrypt_key
 from django.core.files.base import ContentFile
 import base64
+from .models import FileShare, FileShareLink
+from django.shortcuts import get_object_or_404
 
 def set_token_cookies(response, token):
     """Helper function to set JWT cookies"""
@@ -281,3 +283,119 @@ def list_files(request):
         'id', 'file_name', 'file_size', 'uploaded_at'
     )
     return JsonResponse({'files': list(files)})
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def share_file(request, file_id):
+    try:
+        file = get_object_or_404(File, id=file_id, owner=request.user)
+        data = json.loads(request.body)
+        shared_with_email = data.get('email')
+        permission = data.get('permission')
+        
+        shared_with_user = User.objects.get(email=shared_with_email)
+        
+        # Create or update sharing permission
+        FileShare.objects.update_or_create(
+            file=file,
+            shared_with=shared_with_user,
+            defaults={'permission': permission}
+        )
+        
+        file.shared = True
+        file.save()
+        
+        return JsonResponse({'message': 'File shared successfully'})
+    except User.DoesNotExist:
+        return JsonResponse({'error': 'User not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_share_link(request, file_id):
+    try:
+        file = get_object_or_404(File, id=file_id, owner=request.user)
+        
+        # Get expiry_hours from either JSON or form data
+        expiry_hours = 24  # default value
+        if request.content_type == 'application/json':
+            expiry_hours = request.data.get('expiry_hours', 24)
+        else:
+            expiry_hours = request.POST.get('expiry_hours', 24)
+        
+        try:
+            expiry_hours = int(expiry_hours)
+        except (TypeError, ValueError):
+            expiry_hours = 24
+        
+        share_link = file.generate_share_link(expiry_hours)
+        
+        return JsonResponse({
+            'share_link': f'/shared/{share_link.token}',
+            'expires_at': share_link.expires_at.isoformat()
+        })
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@api_view(['GET'])
+def access_shared_file(request, token):
+    try:
+        share_link = get_object_or_404(FileShareLink, token=token)
+        
+        if not share_link.is_valid():
+            return JsonResponse({'error': 'Share link has expired'}, status=400)
+        
+        file = share_link.file
+        password = request.GET.get('password')
+
+        # If no password provided, return metadata
+        if not password:
+            return JsonResponse({
+                'file_name': file.file_name,
+                'file_size': file.file_size,
+                'owner': file.owner.email,
+                'content_type': file.content_type
+            })
+            
+        try:
+            # Decrypt and serve file content
+            encryption_key = decrypt_key(file.encryption_key, password)
+            encrypted_content = file.encrypted_file.read()
+            decrypted_content = decrypt_file(encrypted_content, encryption_key)
+            
+            response = HttpResponse(
+                decrypted_content,
+                content_type=file.content_type
+            )
+            return response
+        except Exception as e:
+            return JsonResponse({'error': 'Invalid password or decryption failed'}, status=400)
+            
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def list_shared_files(request):
+    shared_files = FileShare.objects.filter(shared_with=request.user).values(
+        'file__id',
+        'file__file_name',
+        'file__file_size',
+        'file__uploaded_at',
+        'permission'
+    )
+    return JsonResponse({'shared_files': list(shared_files)})
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_file(request, file_id):
+    try:
+        file = get_object_or_404(File, id=file_id, owner=request.user)
+        # Delete the actual file from storage
+        file.encrypted_file.delete()
+        # Delete the database record
+        file.delete()
+        return JsonResponse({'message': 'File deleted successfully'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)

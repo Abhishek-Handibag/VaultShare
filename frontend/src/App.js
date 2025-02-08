@@ -5,6 +5,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import ForgotPassword from './components/ForgotPassword';
 import Dashboard from './components/Dashboard';
+import SharedFile from './components/SharedFile';
 import logo from './logo.svg';
 import './App.css';
 import { Provider } from 'react-redux';
@@ -34,6 +35,7 @@ function App() {
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/shared/:token" element={<SharedFile />} />
           </Routes>
         </BrowserRouter>
       </ThemeProvider>
