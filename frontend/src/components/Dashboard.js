@@ -35,6 +35,7 @@ import { logoutThunk, uploadFile, downloadFile, listFiles, shareFile, createShar
 import LockIcon from '@mui/icons-material/Lock';
 import SecurityIcon from '@mui/icons-material/Security';
 import EncryptionIcon from '@mui/icons-material/Lock'; // Add this import
+import SecurePDFViewer from './SecurePDFViewer';
 
 function Dashboard() {
     const dispatch = useDispatch();
@@ -340,15 +341,23 @@ function Dashboard() {
         }
 
         if (previewContent.type === 'application/pdf') {
+            // Get the current file being previewed
+            const currentFile = [...ownedFiles, ...sharedFiles].find(f => f.id === selectedFileId);
+            const hasDownloadPermission = currentFile?.is_owner || currentFile?.permission === 'download';
+
             return (
                 <Box sx={{ height: '85vh' }}>
-                    <iframe
-                        src={previewContent.url}
-                        width="100%"
-                        height="100%"
-                        title="PDF Viewer"
-                        style={{ border: 'none' }}
-                    />
+                    {hasDownloadPermission ? (
+                        <iframe
+                            src={previewContent.url}
+                            width="100%"
+                            height="100%"
+                            title="PDF Viewer"
+                            style={{ border: 'none' }}
+                        />
+                    ) : (
+                        <SecurePDFViewer url={previewContent.url} />
+                    )}
                 </Box>
             );
         }
