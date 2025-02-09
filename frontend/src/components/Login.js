@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Box, Container, TextField, Button, Typography, Paper } from '@mui/material';
+import { Box, Container, TextField, Button, Typography, Paper, CircularProgress, Alert, Skeleton } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginThunk, verifyOtpThunk } from '../services/api';
@@ -17,6 +17,12 @@ function Login() {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [showOtpField, setShowOtpField] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  React.useEffect(() => {
+    // Simulate initial page load
+    setTimeout(() => setPageLoading(false), 1000);
+  }, []);
 
   const validateForm = () => {
     const newErrors = {};
@@ -66,7 +72,7 @@ function Login() {
 
         if (result.message === 'OTP sent to email') {
           setShowOtpField(true);
-          setErrors({});
+          setErrors({ success: 'OTP sent successfully to your email!' });
         }
       } else {
         const result = await dispatch(verifyOtpThunk({
@@ -75,7 +81,8 @@ function Login() {
         })).unwrap();
 
         if (result.success) {
-          navigate('/dashboard');
+          setErrors({ success: 'Login successful! Redirecting...' });
+          setTimeout(() => navigate('/dashboard'), 1500);
         }
       }
     } catch (error) {
@@ -86,6 +93,16 @@ function Login() {
       setIsLoading(false);
     }
   };
+
+  if (pageLoading) {
+    return (
+      <Container component="main" maxWidth="xs">
+        <Box sx={{ mt: 8 }}>
+          <Skeleton variant="rectangular" height={400} />
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container component="main" maxWidth="xs">
@@ -105,12 +122,31 @@ function Login() {
             flexDirection: 'column',
             alignItems: 'center',
             background: 'rgba(26, 32, 39, 0.9)',
+            borderRadius: 2,
+            transition: 'all 0.3s ease-in-out',
+            '&:hover': {
+              transform: 'translateY(-5px)',
+              boxShadow: 6,
+            }
           }}
         >
           <LockOutlinedIcon sx={{ fontSize: 40, mb: 2, color: 'primary.main' }} />
           <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
             Sign In
           </Typography>
+
+          {errors.success && (
+            <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
+              {errors.success}
+            </Alert>
+          )}
+
+          {errors.submit && (
+            <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
+              {errors.submit}
+            </Alert>
+          )}
+
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
             <TextField
               margin="normal"
@@ -163,9 +199,27 @@ function Login() {
               fullWidth
               variant="contained"
               disabled={isLoading}
-              sx={{ mt: 3, mb: 2 }}
+              sx={{
+                mt: 3,
+                mb: 2,
+                height: 48,
+                position: 'relative'
+              }}
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {isLoading ? (
+                <CircularProgress
+                  size={24}
+                  sx={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    marginTop: '-12px',
+                    marginLeft: '-12px',
+                  }}
+                />
+              ) : (
+                showOtpField ? 'Verify OTP' : 'Sign In'
+              )}
             </Button>
             {errors.submit && (
               <Typography color="error" variant="body2" sx={{ mt: 1, textAlign: 'center' }}>

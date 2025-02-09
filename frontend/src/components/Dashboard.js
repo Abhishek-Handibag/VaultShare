@@ -18,7 +18,11 @@ import {
     DialogContent,
     DialogTitle,
     TextField,
-    MenuItem
+    MenuItem,
+    Snackbar,
+    Alert,
+    CircularProgress,
+    Fade
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -59,6 +63,20 @@ function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [previewContent, setPreviewContent] = useState(null);
+    const [snackbar, setSnackbar] = useState({
+        open: false,
+        message: '',
+        severity: 'info' // 'error', 'warning', 'info', 'success'
+    });
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const showSnackbar = (message, severity = 'info') => {
+        setSnackbar({ open: true, message, severity });
+    };
+
+    const handleCloseSnackbar = () => {
+        setSnackbar(prev => ({ ...prev, open: false }));
+    };
 
     useEffect(() => {
         if (!user) {
@@ -92,8 +110,12 @@ function Dashboard() {
     };
 
     const handleUpload = async () => {
-        if (!selectedFile || !password) return;
+        if (!selectedFile || !password) {
+            showSnackbar('Please select a file and enter a password', 'warning');
+            return;
+        }
 
+        setIsProcessing(true);
         const formData = new FormData();
         formData.append('file', selectedFile);
         formData.append('password', password);
@@ -101,13 +123,16 @@ function Dashboard() {
         try {
             const response = await uploadFile(formData);
             if (response.message) {
+                showSnackbar('File uploaded successfully!', 'success');
                 setUploadDialog(false);
                 setSelectedFile(null);
                 setPassword('');
                 fetchFiles();
             }
         } catch (error) {
-            console.error('Error uploading file:', error);
+            showSnackbar('Failed to upload file', 'error');
+        } finally {
+            setIsProcessing(false);
         }
     };
 
@@ -481,22 +506,28 @@ function Dashboard() {
         </Box>
     );
 
+    const dialogStyles = {
+        paper: {
+            background: 'rgba(16, 20, 24, 0.95)',
+            border: '1px solid #2f4f4f',
+            boxShadow: '0 0 20px rgba(0, 255, 0, 0.15)',
+            backdropFilter: 'blur(10px)',
+            transition: 'all 0.3s ease',
+            '& .MuiDialogTitle-root': {
+                borderBottom: '1px solid #2f4f4f',
+                color: '#00ff00'
+            }
+        }
+    };
+
+    // Update renderUploadDialog with loading state
     const renderUploadDialog = () => (
         <Dialog
             open={uploadDialog}
-            onClose={() => {
-                setUploadDialog(false);
-                setSelectedFile(null);
-                setPassword('');
-            }}
-            PaperProps={{
-                sx: {
-                    background: 'rgba(16, 20, 24, 0.95)',
-                    border: '1px solid #2f4f4f',
-                    boxShadow: '0 0 20px rgba(0, 255, 0, 0.15)',
-                    minWidth: '400px'
-                }
-            }}
+            onClose={() => !isProcessing && setUploadDialog(false)}
+            PaperProps={{ sx: dialogStyles.paper }}
+            TransitionComponent={Fade}
+            transitionDuration={300}
         >
             <DialogTitle sx={{
                 borderBottom: '1px solid #2f4f4f',
@@ -553,6 +584,7 @@ function Dashboard() {
                 <Button
                     variant="contained"
                     onClick={handleUpload}
+                    disabled={isProcessing}
                     fullWidth
                     sx={{
                         mt: 2,
@@ -564,10 +596,39 @@ function Dashboard() {
                         }
                     }}
                 >
-                    Encrypt & Upload
+                    {isProcessing ? (
+                        <CircularProgress size={24} color="inherit" />
+                    ) : (
+                        'Encrypt & Upload'
+                    )}
                 </Button>
             </DialogContent>
         </Dialog>
+    );
+
+    // Custom Snackbar component
+    const CustomSnackbar = () => (
+        <Snackbar
+            open={snackbar.open}
+            autoHideDuration={6000}
+            onClose={handleCloseSnackbar}
+            TransitionComponent={Fade}
+            anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        >
+            <Alert
+                onClose={handleCloseSnackbar}
+                severity={snackbar.severity}
+                variant="filled"
+                sx={{
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                    '& .MuiAlert-icon': {
+                        fontSize: '1.2rem'
+                    }
+                }}
+            >
+                {snackbar.message}
+            </Alert>
+        </Snackbar>
     );
 
     return (
@@ -882,8 +943,26 @@ function Dashboard() {
                     )}
                 </Paper>
             </Container >
+            <CustomSnackbar />
         </Box >
     );
 }
+
+// Add smooth transitions to tables
+const tableStyles = {
+    container: {
+        transition: 'all 0.3s ease',
+        '& .MuiTableRow-root': {
+            transition: 'background-color 0.2s ease',
+            '&:hover': {
+                backgroundColor: 'rgba(0, 255, 0, 0.05)',
+            }
+        },
+        '& .MuiTableCell-root': {
+            color: '#c0c0c0',
+            borderColor: 'rgba(47, 79, 79, 0.5)'
+        }
+    }
+};
 
 export default Dashboard;
