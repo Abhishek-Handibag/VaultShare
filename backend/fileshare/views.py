@@ -460,9 +460,9 @@ def revoke_file_access(request, file_id):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @authentication_classes([CookieJWTAuthentication])
-def expire_share_link(request, link_id):
+def expire_share_link(request, token):
     try:
-        share_link = get_object_or_404(FileShareLink, id=link_id, file__owner=request.user)
+        share_link = get_object_or_404(FileShareLink, token=token, file__owner=request.user)
         share_link.expire_link()
         return JsonResponse({'message': 'Link expired successfully'})
     except Exception as e:
