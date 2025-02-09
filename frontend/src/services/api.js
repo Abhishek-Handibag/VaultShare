@@ -14,9 +14,15 @@ const getAuthHeaders = () => {
     const headers = {
         'Content-Type': 'application/json',
     };
-    const token = document.cookie.split('; ').find(row => row.startsWith('access_token='));
-    if (token) {
-        headers['Authorization'] = `Bearer ${token.split('=')[1]}`;
+
+    // Get access token from cookie
+    const accessToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('access_token='))
+        ?.split('=')[1];
+
+    if (accessToken) {
+        headers['Authorization'] = `Bearer ${decodeURIComponent(accessToken)}`;
     }
 
     // Add CSRF token for non-GET requests
@@ -111,9 +117,20 @@ export const logout = async () => {
     return response.json();
 };
 
+// Update uploadFile function to include Authorization header
 export const uploadFile = async (formData) => {
-    const headers = getAuthHeaders();
-    delete headers['Content-Type']; // Remove Content-Type for FormData
+    const headers = {};
+    // Get access token from cookie
+    const accessToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('access_token='))
+        ?.split('=')[1];
+
+    if (accessToken) {
+        headers['Authorization'] = `Bearer ${decodeURIComponent(accessToken)}`;
+    }
+
+    // Add CSRF token
     const csrfToken = getCSRFToken();
     if (csrfToken) {
         headers['X-CSRFToken'] = csrfToken;
@@ -137,11 +154,26 @@ export const downloadFile = async (fileId, password) => {
 };
 
 export const listFiles = async () => {
+    const headers = {};
+    const accessToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('access_token='))
+        ?.split('=')[1];
+
+    if (accessToken) {
+        headers['Authorization'] = `Bearer ${decodeURIComponent(accessToken)}`;
+    }
+
     const response = await fetch(`${API_BASE_URL}/list-files/`, {
         method: 'GET',
         credentials: 'include',
-        headers: getAuthHeaders(),
+        headers
     });
+
+    if (!response.ok) {
+        throw new Error('Failed to fetch files');
+    }
+
     return response.json();
 };
 

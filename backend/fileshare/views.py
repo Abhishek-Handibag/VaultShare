@@ -12,7 +12,7 @@ from django.conf import settings
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 from .models import File
 from .crypto_utils import generate_key, encrypt_file, decrypt_file, encrypt_key, decrypt_key
@@ -20,6 +20,16 @@ from django.core.files.base import ContentFile
 import base64
 from .models import FileShare, FileShareLink
 from django.shortcuts import get_object_or_404
+
+class CookieJWTAuthentication(JWTAuthentication):
+    def authenticate(self, request):
+        access_token = request.COOKIES.get('access_token')
+        if not access_token:
+            return None
+            
+        # Add the token to the Authorization header
+        request.META['HTTP_AUTHORIZATION'] = f'Bearer {access_token}'
+        return super().authenticate(request)
 
 def set_token_cookies(response, token):
     """Helper function to set JWT cookies"""
@@ -206,13 +216,19 @@ def logout(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@authentication_classes([CookieJWTAuthentication])
 def verify_auth(request):
     return JsonResponse({'isAuthenticated': True})
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@authentication_classes([CookieJWTAuthentication])
 def upload_file(request):
     try:
+        # Add debug logging
+        print("Auth header:", request.headers.get('Authorization'))
+        print("User:", request.user)
+        
         file = request.FILES['file']
         password = request.POST['password']
         
@@ -242,10 +258,12 @@ def upload_file(request):
         
         return JsonResponse({'message': 'File uploaded successfully'})
     except Exception as e:
+        print("Upload error:", str(e))  # Add error logging
         return JsonResponse({'error': str(e)}, status=400)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@authentication_classes([CookieJWTAuthentication])
 def download_file(request, file_id):
     try:
         file_obj = File.objects.get(id=file_id, owner=request.user)
@@ -278,6 +296,7 @@ def download_file(request, file_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@authentication_classes([CookieJWTAuthentication])
 def list_files(request):
     files = File.objects.filter(owner=request.user).values(
         'id', 'file_name', 'file_size', 'uploaded_at'
@@ -286,6 +305,7 @@ def list_files(request):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@authentication_classes([CookieJWTAuthentication])
 def share_file(request, file_id):
     try:
         file = get_object_or_404(File, id=file_id, owner=request.user)
@@ -313,6 +333,7 @@ def share_file(request, file_id):
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@authentication_classes([CookieJWTAuthentication])
 def create_share_link(request, file_id):
     try:
         file = get_object_or_404(File, id=file_id, owner=request.user)
@@ -339,6 +360,7 @@ def create_share_link(request, file_id):
         return JsonResponse({'error': str(e)}, status=400)
 
 @api_view(['GET'])
+@authentication_classes([CookieJWTAuthentication])
 def access_shared_file(request, token):
     try:
         share_link = get_object_or_404(FileShareLink, token=token)
@@ -377,6 +399,7 @@ def access_shared_file(request, token):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@authentication_classes([CookieJWTAuthentication])
 def list_shared_files(request):
     shared_files = FileShare.objects.filter(shared_with=request.user).values(
         'file__id',
@@ -389,6 +412,7 @@ def list_shared_files(request):
 
 @api_view(['DELETE'])
 @permission_classes([IsAuthenticated])
+@authentication_classes([CookieJWTAuthentication])
 def delete_file(request, file_id):
     try:
         file = get_object_or_404(File, id=file_id, owner=request.user)
