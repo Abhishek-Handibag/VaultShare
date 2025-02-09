@@ -32,6 +32,9 @@ import DialogActions from '@mui/material/DialogActions';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { logoutThunk, uploadFile, downloadFile, listFiles, shareFile, createShareLink, deleteFile, revokeFileAccess, expireShareLink } from '../services/api';
+import LockIcon from '@mui/icons-material/Lock';
+import SecurityIcon from '@mui/icons-material/Security';
+import EncryptionIcon from '@mui/icons-material/Lock'; // Add this import
 
 function Dashboard() {
     const dispatch = useDispatch();
@@ -203,16 +206,18 @@ function Dashboard() {
             if (response.ok) {
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
-                const selectedFile = ownedFiles.find(f => f.id === selectedFileId);
-                const contentType = response.headers.get('content-type') || selectedFile.content_type;
+                // Find the file from either owned or shared files
+                const selectedFile = ownedFiles.find(f => f.id === selectedFileId) ||
+                    sharedFiles.find(f => f.id === selectedFileId);
 
-                if (!contentType) {
-                    throw new Error('Content type not available');
+                if (!selectedFile) {
+                    throw new Error('File not found');
                 }
 
+                const contentType = response.headers.get('content-type') || selectedFile.content_type;
                 setPreviewContent({
                     url,
-                    type: contentType,
+                    type: contentType || 'application/octet-stream', // Fallback content type
                     name: selectedFile.file_name
                 });
                 setDownloadDialog(false);
@@ -263,17 +268,44 @@ function Dashboard() {
 
     const handleFileAction = async (file, action) => {
         setSelectedFileId(file.id);
-        if (file.is_owner) {
-            // Owner can access without password
-            if (action === 'preview') {
-                setPreviewContent({ pending: true });
-            }
-            await handleFileAccess();
-        } else {
+        if (!file.is_owner) { // Show password dialog for shared files
             setDownloadDialog(true);
             if (action === 'preview') {
                 setPreviewContent({ pending: true });
             }
+            return;
+        }
+
+        try {
+            const response = await downloadFile(file.id, ''); // Empty password for owned files
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+
+                if (action === 'preview') {
+                    const contentType = response.headers.get('content-type') || file.content_type;
+                    setPreviewContent({
+                        url,
+                        type: contentType || 'application/octet-stream',
+                        name: file.file_name
+                    });
+                    setPreviewDialog(true);
+                } else {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = file.file_name;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                }
+                setError(null);
+            } else {
+                const errorData = await response.json();
+                setError(errorData.error || 'Failed to access file');
+            }
+        } catch (error) {
+            console.error('Error accessing file:', error);
+            setError('Failed to access file');
         }
     };
 
@@ -363,6 +395,172 @@ function Dashboard() {
         );
     };
 
+    const EmptyStateBox = ({ icon, title, message }) => (
+        <Box
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                p: 4,
+                border: '2px solid #2f4f4f',
+                borderRadius: 2,
+                background: 'rgba(26, 32, 39, 0.95)',
+                backdropFilter: 'blur(5px)',
+                boxShadow: '0 0 15px rgba(0, 255, 0, 0.1)',
+            }}
+        >
+            {icon}
+            <Typography variant="h6" sx={{ mt: 2, color: '#00ff00', textAlign: 'center' }}>
+                {title}
+            </Typography>
+            <Typography variant="body1" sx={{ mt: 1, color: '#7fff00', textAlign: 'center' }}>
+                {message}
+            </Typography>
+        </Box>
+    );
+
+    // Update the renderUploadButton function
+    const renderUploadButton = () => (
+        <Box
+            sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                mt: 4,
+                mb: 2,
+                width: '100%',
+                position: 'relative'
+            }}
+        >
+            <Button
+                variant="contained"
+                // startIcon={<CloudUploadIcon />}
+                onClick={() => setUploadDialog(true)}
+                sx={{
+                    minWidth: '200px',
+                    padding: '12px 24px',
+                    fontSize: '1.1rem',
+                    background: 'linear-gradient(45deg, #1a237e 30%, #0d47a1 90%)',
+                    boxShadow: '0 0 20px rgba(0, 255, 0, 0.2)',
+                    border: '1px solid rgba(0, 255, 0, 0.1)',
+                    '&:hover': {
+                        background: 'linear-gradient(45deg, #0d47a1 30%, #1a237e 90%)',
+                        boxShadow: '0 0 30px rgba(0, 255, 0, 0.4)',
+                        transform: 'scale(1.02)',
+                        transition: 'all 0.3s ease'
+                    }
+                }}
+            >
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <SecurityIcon />
+                    Secure Upload
+                </Box>
+            </Button>
+            <Typography
+                variant="body2"
+                sx={{
+                    mt: 1,
+                    color: 'rgba(0, 255, 0, 0.7)',
+                    textAlign: 'center',
+                    fontStyle: 'italic'
+                }}
+            >
+                End-to-end encrypted file sharing
+            </Typography>
+        </Box>
+    );
+
+    const renderUploadDialog = () => (
+        <Dialog
+            open={uploadDialog}
+            onClose={() => {
+                setUploadDialog(false);
+                setSelectedFile(null);
+                setPassword('');
+            }}
+            PaperProps={{
+                sx: {
+                    background: 'rgba(16, 20, 24, 0.95)',
+                    border: '1px solid #2f4f4f',
+                    boxShadow: '0 0 20px rgba(0, 255, 0, 0.15)',
+                    minWidth: '400px'
+                }
+            }}
+        >
+            <DialogTitle sx={{
+                borderBottom: '1px solid #2f4f4f',
+                color: '#00ff00'
+            }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <EncryptionIcon />
+                    Secure File Upload
+                </Box>
+            </DialogTitle>
+            <DialogContent sx={{ mt: 2 }}>
+                <Box sx={{
+                    border: '2px dashed #2f4f4f',
+                    borderRadius: 2,
+                    p: 3,
+                    mb: 2,
+                    textAlign: 'center',
+                    cursor: 'pointer',
+                    '&:hover': {
+                        borderColor: '#00ff00',
+                        boxShadow: '0 0 10px rgba(0, 255, 0, 0.1)'
+                    }
+                }}>
+                    <input
+                        type="file"
+                        onChange={(e) => setSelectedFile(e.target.files[0])}
+                        style={{ display: 'none' }}
+                        id="file-input"
+                    />
+                    <label htmlFor="file-input" style={{ cursor: 'pointer' }}>
+                        <CloudUploadIcon sx={{ fontSize: 40, color: '#00ff00', mb: 1 }} />
+                        <Typography sx={{ color: '#00ff00' }}>
+                            {selectedFile ? selectedFile.name : 'Click or drag to upload file'}
+                        </Typography>
+                    </label>
+                </Box>
+                <TextField
+                    fullWidth
+                    type="password"
+                    label="Encryption Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    variant="outlined"
+                    sx={{
+                        '& .MuiOutlinedInput-root': {
+                            '& fieldset': { borderColor: '#2f4f4f' },
+                            '&:hover fieldset': { borderColor: '#00ff00' },
+                            '&.Mui-focused fieldset': { borderColor: '#00ff00' },
+                        },
+                        '& .MuiInputLabel-root': { color: '#00ff00' },
+                        '& .MuiInputBase-input': { color: '#fff' }
+                    }}
+                />
+                <Button
+                    variant="contained"
+                    onClick={handleUpload}
+                    fullWidth
+                    sx={{
+                        mt: 2,
+                        background: 'linear-gradient(45deg, #1a237e 30%, #0d47a1 90%)',
+                        boxShadow: '0 0 10px rgba(0, 255, 0, 0.3)',
+                        '&:hover': {
+                            background: 'linear-gradient(45deg, #0d47a1 30%, #1a237e 90%)',
+                            boxShadow: '0 0 15px rgba(0, 255, 0, 0.5)',
+                        }
+                    }}
+                >
+                    Encrypt & Upload
+                </Button>
+            </DialogContent>
+        </Dialog>
+    );
+
     return (
         <Box sx={{ flexGrow: 1 }}>
             <AppBar position="static">
@@ -376,142 +574,15 @@ function Dashboard() {
                 </Toolbar>
             </AppBar>
 
-            <Container maxWidth="lg" sx={{ mt: 4 }}>
-                <Paper sx={{ p: 3, background: 'rgba(26, 32, 39, 0.9)' }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-                        <Typography variant="h5">Files</Typography>
-                        <Button
-                            variant="contained"
-                            startIcon={<CloudUploadIcon />}
-                            onClick={() => setUploadDialog(true)}
-                        >
-                            Upload File
-                        </Button>
-                    </Box>
+            {renderUploadButton()}
 
-                    {loading ? (
-                        <Typography>Loading...</Typography>
-                    ) : error ? (
-                        <Typography color="error">{error}</Typography>
-                    ) : ownedFiles.length === 0 ? (
-                        <Typography>No files found</Typography>
-                    ) : (
-                        <TableContainer>
-                            <Table>
-                                <TableHead>
-                                    <TableRow>
-                                        <TableCell>File Name</TableCell>
-                                        <TableCell>Size</TableCell>
-                                        <TableCell>Upload Date</TableCell>
-                                        <TableCell>Shared With</TableCell>
-                                        <TableCell>Active Links</TableCell>
-                                        <TableCell>Actions</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {ownedFiles.map((file) => (
-                                        <TableRow key={file.id}>
-                                            <TableCell>{file.file_name}</TableCell>
-                                            <TableCell>{Math.round(file.file_size / 1024)} KB</TableCell>
-                                            <TableCell>{new Date(file.uploaded_at).toLocaleDateString()}</TableCell>
-                                            <TableCell>
-                                                {file.shared_with?.map(share => (
-                                                    <Box key={share.email} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                        <Typography variant="body2">
-                                                            {share.email} ({share.permission})
-                                                        </Typography>
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => handleRevokeAccess(file.id, share.email)}
-                                                        >
-                                                            <DeleteIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Box>
-                                                ))}
-                                            </TableCell>
-                                            <TableCell>
-                                                {file.share_links?.map(link => (
-                                                    <Box key={link.token} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                        <Typography variant="body2">
-                                                            Expires: {new Date(link.expires_at).toLocaleDateString()}
-                                                        </Typography>
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => handleExpireLink(link.token)}
-                                                        >
-                                                            <DeleteIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Box>
-                                                ))}
-                                            </TableCell>
-                                            <TableCell>
-                                                <IconButton onClick={() => {
-                                                    setSelectedFileId(file.id);
-                                                    setDownloadDialog(true);
-                                                }}>
-                                                    <DownloadIcon />
-                                                </IconButton>
-                                                <IconButton onClick={() => {
-                                                    setSelectedFileId(file.id);
-                                                    setDownloadDialog(true);
-                                                    // Set a flag to indicate we want to preview
-                                                    setPreviewContent({ pending: true });
-                                                }}>
-                                                    <VisibilityIcon />
-                                                </IconButton>
-                                                <IconButton onClick={() => {
-                                                    setSelectedFileId(file.id);
-                                                    setShareDialog(true);
-                                                }}>
-                                                    <ShareIcon />
-                                                </IconButton>
-                                                <IconButton onClick={() => {
-                                                    setSelectedFileId(file.id);
-                                                    setShareLinkDialog(true);
-                                                }}>
-                                                    <LinkIcon />
-                                                </IconButton>
-                                                <IconButton
-                                                    onClick={() => {
-                                                        setSelectedFileId(file.id);
-                                                        setDeleteDialog(true);
-                                                    }}
-                                                    color="error"
-                                                >
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
-                    )}
-                </Paper>
+            <Container maxWidth="lg">
+                {/* Remove the first Paper component with "Files" section */}
+                {/* Keep the rest of the owned files and shared files sections */}
+                {/* ...existing Container content... */}
             </Container>
 
-            {/* Upload Dialog */}
-            <Dialog open={uploadDialog} onClose={() => setUploadDialog(false)}>
-                <DialogTitle>Upload File</DialogTitle>
-                <DialogContent>
-                    <input
-                        type="file"
-                        onChange={(e) => setSelectedFile(e.target.files[0])}
-                        style={{ marginBottom: 16 }}
-                    />
-                    <TextField
-                        fullWidth
-                        type="password"
-                        label="Encryption Password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        margin="normal"
-                    />
-                    <Button variant="contained" onClick={handleUpload}>
-                        Upload
-                    </Button>
-                </DialogContent>
-            </Dialog>
+            {renderUploadDialog()}
 
             {/* Download/Preview Dialog */}
             <Dialog open={downloadDialog} onClose={() => {
@@ -658,99 +729,148 @@ function Dashboard() {
                 {/* Owned Files Section */}
                 <Paper sx={{ p: 3, mb: 3, background: 'rgba(26, 32, 39, 0.9)' }}>
                     <Typography variant="h5" gutterBottom>Files You Own</Typography>
-                    {/* ...existing file upload button... */}
-                    <TableContainer>
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>File Name</TableCell>
-                                    <TableCell>Size</TableCell>
-                                    <TableCell>Shared With</TableCell>
-                                    <TableCell>Share Links</TableCell>
-                                    <TableCell>Actions</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {ownedFiles.map((file) => (
-                                    <TableRow key={file.id}>
-                                        <TableCell>{file.file_name}</TableCell>
-                                        <TableCell>{Math.round(file.file_size / 1024)} KB</TableCell>
-                                        <TableCell>
-                                            {file.shared_with?.map(share => (
-                                                <Box key={share.email} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                    <Typography variant="body2">
-                                                        {share.email} ({share.permission})
-                                                    </Typography>
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleRevokeAccess(file.id, share.email)}
-                                                    >
-                                                        <DeleteIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Box>
-                                            ))}
-                                        </TableCell>
-                                        <TableCell>
-                                            {file.share_links?.map(link => (
-                                                <Box key={link.token} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                    <Typography variant="body2">
-                                                        Expires: {new Date(link.expires_at).toLocaleDateString()}
-                                                    </Typography>
-                                                    <IconButton
-                                                        size="small"
-                                                        onClick={() => handleExpireLink(link.token)}
-                                                    >
-                                                        <DeleteIcon fontSize="small" />
-                                                    </IconButton>
-                                                </Box>
-                                            ))}
-                                        </TableCell>
-                                        <TableCell>
-                                            {/* ...existing action buttons... */}
-                                        </TableCell>
+                    {ownedFiles.length === 0 ? (
+                        <EmptyStateBox
+                            icon={<SecurityIcon sx={{ fontSize: 60, color: '#00ff00' }} />}
+                            title="No Files Found"
+                            message="Your secure vault is empty. Upload encrypted files to get started."
+                        />
+                    ) : (
+                        <TableContainer>
+                            <Table>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell>File Name</TableCell>
+                                        <TableCell>Size</TableCell>
+                                        <TableCell>Shared With</TableCell>
+                                        <TableCell>Share Links</TableCell>
+                                        <TableCell>Actions</TableCell>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
+                                </TableHead>
+                                <TableBody>
+                                    {ownedFiles.map((file) => (
+                                        <TableRow key={file.id}>
+                                            <TableCell>{file.file_name}</TableCell>
+                                            <TableCell>{Math.round(file.file_size / 1024)} KB</TableCell>
+                                            <TableCell>
+                                                {file.shared_with?.map(share => (
+                                                    <Box key={share.email} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                                        <Typography variant="body2">
+                                                            {share.email} ({share.permission})
+                                                        </Typography>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleRevokeAccess(file.id, share.email)}
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Box>
+                                                ))}
+                                            </TableCell>
+                                            <TableCell>
+                                                {file.share_links?.map(link => (
+                                                    <Box key={link.token} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                                        <Typography variant="body2">
+                                                            Expires: {new Date(link.expires_at).toLocaleDateString()}
+                                                        </Typography>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleExpireLink(link.token)}
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Box>
+                                                ))}
+                                            </TableCell>
+                                            <TableCell>
+                                                <IconButton onClick={() => {
+                                                    setSelectedFileId(file.id);
+                                                    setDownloadDialog(true);
+                                                }}>
+                                                    <DownloadIcon />
+                                                </IconButton>
+                                                <IconButton onClick={() => {
+                                                    setSelectedFileId(file.id);
+                                                    setDownloadDialog(true);
+                                                    // Set a flag to indicate we want to preview
+                                                    setPreviewContent({ pending: true });
+                                                }}>
+                                                    <VisibilityIcon />
+                                                </IconButton>
+                                                <IconButton onClick={() => {
+                                                    setSelectedFileId(file.id);
+                                                    setShareDialog(true);
+                                                }}>
+                                                    <ShareIcon />
+                                                </IconButton>
+                                                <IconButton onClick={() => {
+                                                    setSelectedFileId(file.id);
+                                                    setShareLinkDialog(true);
+                                                }}>
+                                                    <LinkIcon />
+                                                </IconButton>
+                                                <IconButton
+                                                    onClick={() => {
+                                                        setSelectedFileId(file.id);
+                                                        setDeleteDialog(true);
+                                                    }}
+                                                    color="error"
+                                                >
+                                                    <DeleteIcon />
+                                                </IconButton>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    )}
                 </Paper>
 
                 {/* Shared With You Section */}
                 <Paper sx={{ p: 3, background: 'rgba(26, 32, 39, 0.9)' }}>
                     <Typography variant="h5" gutterBottom>Shared With You</Typography>
-                    <TableContainer>
-                        <Table>
-                            <TableHead>
-                                <TableRow>
-                                    <TableCell>File Name</TableCell>
-                                    <TableCell>Size</TableCell>
-                                    <TableCell>Owner</TableCell>
-                                    <TableCell>Permission</TableCell>
-                                    <TableCell>Actions</TableCell>
-                                </TableRow>
-                            </TableHead>
-                            <TableBody>
-                                {sharedFiles.map((file) => (
-                                    <TableRow key={file.id}>
-                                        <TableCell>{file.file_name}</TableCell>
-                                        <TableCell>{Math.round(file.file_size / 1024)} KB</TableCell>
-                                        <TableCell>{file.owner}</TableCell>
-                                        <TableCell>{file.permission}</TableCell>
-                                        <TableCell>
-                                            {file.permission === 'download' && (
-                                                <IconButton onClick={() => handleFileAction(file, 'download')}>
-                                                    <DownloadIcon />
-                                                </IconButton>
-                                            )}
-                                            <IconButton onClick={() => handleFileAction(file, 'preview')}>
-                                                <VisibilityIcon />
-                                            </IconButton>
-                                        </TableCell>
+                    {sharedFiles.length === 0 ? (
+                        <EmptyStateBox
+                            icon={<LockIcon sx={{ fontSize: 60, color: '#00ff00' }} />}
+                            title="No Shared Files"
+                            message="No files have been shared with you yet. Shared files will appear here."
+                        />
+                    ) : (
+                        <TableContainer>
+                            <Table>
+                                <TableHead>
+                                    <TableRow>
+                                        <TableCell>File Name</TableCell>
+                                        <TableCell>Size</TableCell>
+                                        <TableCell>Owner</TableCell>
+                                        <TableCell>Permission</TableCell>
+                                        <TableCell>Actions</TableCell>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </TableContainer>
+                                </TableHead>
+                                <TableBody>
+                                    {sharedFiles.map((file) => (
+                                        <TableRow key={file.id}>
+                                            <TableCell>{file.file_name}</TableCell>
+                                            <TableCell>{Math.round(file.file_size / 1024)} KB</TableCell>
+                                            <TableCell>{file.owner}</TableCell>
+                                            <TableCell>{file.permission}</TableCell>
+                                            <TableCell>
+                                                {file.permission === 'download' && (
+                                                    <IconButton onClick={() => handleFileAction(file, 'download')}>
+                                                        <DownloadIcon />
+                                                    </IconButton>
+                                                )}
+                                                <IconButton onClick={() => handleFileAction(file, 'preview')}>
+                                                    <VisibilityIcon />
+                                                </IconButton>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </TableContainer>
+                    )}
                 </Paper>
             </Container >
         </Box >
