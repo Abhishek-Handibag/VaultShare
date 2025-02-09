@@ -33,7 +33,11 @@ class File(models.Model):
     def get_access_info(self):
         """Get file sharing and access information"""
         shared_with = FileShare.objects.filter(file=self).select_related('shared_with')
-        share_links = FileShareLink.objects.filter(file=self)
+        # Only get valid (non-expired) share links
+        share_links = FileShareLink.objects.filter(
+            file=self,
+            expires_at__gt=timezone.now()
+        )
         
         return {
             'shared_with': [
@@ -66,6 +70,7 @@ class File(models.Model):
     def get_complete_info(self):
         """Get comprehensive file information including sharing details"""
         access_info = self.get_access_info()
+        now = timezone.now()
         return {
             'id': self.id,
             'file_name': self.file_name,
@@ -75,7 +80,7 @@ class File(models.Model):
             'is_owner': True,
             'shared': self.shared,
             'shared_with': access_info['shared_with'],
-            'share_links': access_info['share_links']
+            'share_links': [link for link in access_info['share_links'] if link['expires_at'] > now]
         }
 
 class FileShare(models.Model):

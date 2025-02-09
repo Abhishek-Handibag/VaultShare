@@ -22,7 +22,9 @@ import {
     Snackbar,
     Alert,
     CircularProgress,
-    Fade
+    Fade,
+    ListItem,
+    ListItemText
 } from '@mui/material';
 import LogoutIcon from '@mui/icons-material/Logout';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -40,6 +42,10 @@ import LockIcon from '@mui/icons-material/Lock';
 import SecurityIcon from '@mui/icons-material/Security';
 import EncryptionIcon from '@mui/icons-material/Lock'; // Add this import
 import SecurePDFViewer from './SecurePDFViewer';
+
+const isLinkValid = (expiresAt) => {
+    return new Date(expiresAt) > new Date();
+};
 
 function Dashboard() {
     const dispatch = useDispatch();
@@ -838,19 +844,21 @@ function Dashboard() {
                                                 ))}
                                             </TableCell>
                                             <TableCell>
-                                                {file.share_links?.map(link => (
-                                                    <Box key={link.token} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                                                        <Typography variant="body2">
-                                                            Expires: {new Date(link.expires_at).toLocaleDateString()}
-                                                        </Typography>
-                                                        <IconButton
-                                                            size="small"
-                                                            onClick={() => handleExpireLink(link.token)}
-                                                        >
-                                                            <DeleteIcon fontSize="small" />
-                                                        </IconButton>
-                                                    </Box>
-                                                ))}
+                                                {file.share_links?.map(link => {
+                                                    if (!isLinkValid(link.expires_at)) return null;
+
+                                                    return (
+                                                        <ListItem key={link.token}>
+                                                            <ListItemText
+                                                                primary={`Share Link: ${window.location.origin}/shared/${link.token}`}
+                                                                secondary={`Expires: ${new Date(link.expires_at).toLocaleString()}`}
+                                                            />
+                                                            <Button onClick={() => handleExpireLink(link.token)}>
+                                                                Expire Link
+                                                            </Button>
+                                                        </ListItem>
+                                                    );
+                                                })}
                                             </TableCell>
                                             <TableCell>
                                                 <IconButton onClick={() => {
