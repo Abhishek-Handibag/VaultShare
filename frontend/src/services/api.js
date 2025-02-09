@@ -203,6 +203,11 @@ export const listSharedFiles = async () => {
         credentials: 'include',
         headers: getAuthHeaders(),
     });
+
+    if (!response.ok) {
+        throw new Error('Failed to fetch shared files');
+    }
+
     return response.json();
 };
 
@@ -230,6 +235,35 @@ export const deleteFile = async (fileId) => {
         credentials: 'include',
         headers: getAuthHeaders(),
     });
+    return response.json();
+};
+
+export const revokeFileAccess = async (fileId, email) => {
+    const response = await fetch(`${API_BASE_URL}/revoke-access/${fileId}/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ email })
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to revoke access');
+    }
+
+    return response.json();
+};
+
+export const expireShareLink = async (token) => {
+    const response = await fetch(`${API_BASE_URL}/expire-link/${token}/`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: getAuthHeaders()
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to expire link');
+    }
+
     return response.json();
 };
 

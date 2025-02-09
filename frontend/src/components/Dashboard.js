@@ -31,13 +31,14 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import DialogActions from '@mui/material/DialogActions';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { logoutThunk, uploadFile, downloadFile, listFiles, shareFile, createShareLink, deleteFile } from '../services/api';
+import { logoutThunk, uploadFile, downloadFile, listFiles, shareFile, createShareLink, deleteFile, revokeFileAccess, expireShareLink } from '../services/api';
 
 function Dashboard() {
     const dispatch = useDispatch();
     const { user } = useSelector(state => state.auth);
     const navigate = useNavigate();
-    const [files, setFiles] = useState([]);  // Initialize with empty array
+    const [ownedFiles, setOwnedFiles] = useState([]);
+    const [sharedFiles, setSharedFiles] = useState([]);
     const [uploadDialog, setUploadDialog] = useState(false);
     const [downloadDialog, setDownloadDialog] = useState(false);
     const [shareDialog, setShareDialog] = useState(false);
@@ -70,11 +71,13 @@ function Dashboard() {
             setLoading(true);
             setError(null);
             const data = await listFiles();
-            setFiles(data.files || []); // Ensure files is always an array
+            setOwnedFiles(data.owned_files || []);
+            setSharedFiles(data.shared_files || []);
         } catch (error) {
             console.error('Error fetching files:', error);
             setError('Failed to load files');
-            setFiles([]); // Reset to empty array on error
+            setOwnedFiles([]);
+            setSharedFiles([]);
         } finally {
             setLoading(false);
         }
@@ -104,22 +107,67 @@ function Dashboard() {
         }
     };
 
+    const handleFileAccess = async () => {
+        try {
+            const response = await downloadFile(selectedFileId, '');  // Empty password for owner
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const selectedFile = ownedFiles.find(f => f.id === selectedFileId);
+
+                if (previewContent?.pending) {
+                    // Handle preview
+                    const contentType = response.headers.get('content-type') || selectedFile.content_type;
+                    setPreviewContent({
+                        url,
+                        type: contentType,
+                        name: selectedFile.file_name
+                    });
+                    setPreviewDialog(true);
+                } else {
+                    // Handle download
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = selectedFile.file_name;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                }
+                setDownloadDialog(false);
+                setPassword('');
+                setError(null);
+            } else {
+                const errorData = await response.json();
+                setError(errorData.error || 'Failed to access file');
+            }
+        } catch (error) {
+            console.error('Error accessing file:', error);
+            setError('Failed to access file');
+        }
+    };
+
     const handleDownload = async () => {
         try {
+            // Skip password dialog for file owner
+            const file = ownedFiles.find(f => f.id === selectedFileId);
+            if (file?.is_owner) {
+                await handleFileAccess();
+                return;
+            }
+
             const response = await downloadFile(selectedFileId, password);
             if (response.ok) {
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = files.find(f => f.id === selectedFileId).file_name;
+                a.download = file.file_name;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
                 setDownloadDialog(false);
                 setPassword('');
             } else {
-                // Handle error response
                 const errorData = await response.json();
                 setError(errorData.error || 'Failed to download file');
             }
@@ -155,7 +203,7 @@ function Dashboard() {
             if (response.ok) {
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
-                const selectedFile = files.find(f => f.id === selectedFileId);
+                const selectedFile = ownedFiles.find(f => f.id === selectedFileId);
                 const contentType = response.headers.get('content-type') || selectedFile.content_type;
 
                 if (!contentType) {
@@ -190,6 +238,42 @@ function Dashboard() {
         } catch (error) {
             console.error('Error deleting file:', error);
             setError('Failed to delete file');
+        }
+    };
+
+    const handleRevokeAccess = async (fileId, email) => {
+        try {
+            await revokeFileAccess(fileId, email);
+            fetchFiles();
+        } catch (error) {
+            setError('Failed to revoke access');
+        }
+    };
+
+    const handleExpireLink = async (token) => {
+        try {
+            await expireShareLink(token);
+            // Refresh the file list to show updated link status
+            fetchFiles();
+        } catch (error) {
+            setError('Failed to expire link');
+            console.error('Error expiring link:', error);
+        }
+    };
+
+    const handleFileAction = async (file, action) => {
+        setSelectedFileId(file.id);
+        if (file.is_owner) {
+            // Owner can access without password
+            if (action === 'preview') {
+                setPreviewContent({ pending: true });
+            }
+            await handleFileAccess();
+        } else {
+            setDownloadDialog(true);
+            if (action === 'preview') {
+                setPreviewContent({ pending: true });
+            }
         }
     };
 
@@ -309,7 +393,7 @@ function Dashboard() {
                         <Typography>Loading...</Typography>
                     ) : error ? (
                         <Typography color="error">{error}</Typography>
-                    ) : files.length === 0 ? (
+                    ) : ownedFiles.length === 0 ? (
                         <Typography>No files found</Typography>
                     ) : (
                         <TableContainer>
@@ -319,15 +403,47 @@ function Dashboard() {
                                         <TableCell>File Name</TableCell>
                                         <TableCell>Size</TableCell>
                                         <TableCell>Upload Date</TableCell>
+                                        <TableCell>Shared With</TableCell>
+                                        <TableCell>Active Links</TableCell>
                                         <TableCell>Actions</TableCell>
                                     </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                    {files.map((file) => (
+                                    {ownedFiles.map((file) => (
                                         <TableRow key={file.id}>
                                             <TableCell>{file.file_name}</TableCell>
                                             <TableCell>{Math.round(file.file_size / 1024)} KB</TableCell>
                                             <TableCell>{new Date(file.uploaded_at).toLocaleDateString()}</TableCell>
+                                            <TableCell>
+                                                {file.shared_with?.map(share => (
+                                                    <Box key={share.email} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                                        <Typography variant="body2">
+                                                            {share.email} ({share.permission})
+                                                        </Typography>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleRevokeAccess(file.id, share.email)}
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Box>
+                                                ))}
+                                            </TableCell>
+                                            <TableCell>
+                                                {file.share_links?.map(link => (
+                                                    <Box key={link.token} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                                        <Typography variant="body2">
+                                                            Expires: {new Date(link.expires_at).toLocaleDateString()}
+                                                        </Typography>
+                                                        <IconButton
+                                                            size="small"
+                                                            onClick={() => handleExpireLink(link.token)}
+                                                        >
+                                                            <DeleteIcon fontSize="small" />
+                                                        </IconButton>
+                                                    </Box>
+                                                ))}
+                                            </TableCell>
                                             <TableCell>
                                                 <IconButton onClick={() => {
                                                     setSelectedFileId(file.id);
@@ -537,7 +653,107 @@ function Dashboard() {
                     </Button>
                 </DialogActions>
             </Dialog>
-        </Box>
+
+            <Container maxWidth="lg" sx={{ mt: 4 }}>
+                {/* Owned Files Section */}
+                <Paper sx={{ p: 3, mb: 3, background: 'rgba(26, 32, 39, 0.9)' }}>
+                    <Typography variant="h5" gutterBottom>Files You Own</Typography>
+                    {/* ...existing file upload button... */}
+                    <TableContainer>
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>File Name</TableCell>
+                                    <TableCell>Size</TableCell>
+                                    <TableCell>Shared With</TableCell>
+                                    <TableCell>Share Links</TableCell>
+                                    <TableCell>Actions</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {ownedFiles.map((file) => (
+                                    <TableRow key={file.id}>
+                                        <TableCell>{file.file_name}</TableCell>
+                                        <TableCell>{Math.round(file.file_size / 1024)} KB</TableCell>
+                                        <TableCell>
+                                            {file.shared_with?.map(share => (
+                                                <Box key={share.email} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                                    <Typography variant="body2">
+                                                        {share.email} ({share.permission})
+                                                    </Typography>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleRevokeAccess(file.id, share.email)}
+                                                    >
+                                                        <DeleteIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Box>
+                                            ))}
+                                        </TableCell>
+                                        <TableCell>
+                                            {file.share_links?.map(link => (
+                                                <Box key={link.token} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                                    <Typography variant="body2">
+                                                        Expires: {new Date(link.expires_at).toLocaleDateString()}
+                                                    </Typography>
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={() => handleExpireLink(link.token)}
+                                                    >
+                                                        <DeleteIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Box>
+                                            ))}
+                                        </TableCell>
+                                        <TableCell>
+                                            {/* ...existing action buttons... */}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Paper>
+
+                {/* Shared With You Section */}
+                <Paper sx={{ p: 3, background: 'rgba(26, 32, 39, 0.9)' }}>
+                    <Typography variant="h5" gutterBottom>Shared With You</Typography>
+                    <TableContainer>
+                        <Table>
+                            <TableHead>
+                                <TableRow>
+                                    <TableCell>File Name</TableCell>
+                                    <TableCell>Size</TableCell>
+                                    <TableCell>Owner</TableCell>
+                                    <TableCell>Permission</TableCell>
+                                    <TableCell>Actions</TableCell>
+                                </TableRow>
+                            </TableHead>
+                            <TableBody>
+                                {sharedFiles.map((file) => (
+                                    <TableRow key={file.id}>
+                                        <TableCell>{file.file_name}</TableCell>
+                                        <TableCell>{Math.round(file.file_size / 1024)} KB</TableCell>
+                                        <TableCell>{file.owner}</TableCell>
+                                        <TableCell>{file.permission}</TableCell>
+                                        <TableCell>
+                                            {file.permission === 'download' && (
+                                                <IconButton onClick={() => handleFileAction(file, 'download')}>
+                                                    <DownloadIcon />
+                                                </IconButton>
+                                            )}
+                                            <IconButton onClick={() => handleFileAction(file, 'preview')}>
+                                                <VisibilityIcon />
+                                            </IconButton>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </TableContainer>
+                </Paper>
+            </Container >
+        </Box >
     );
 }
 

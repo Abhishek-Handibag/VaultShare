@@ -18,4 +18,6 @@ urlpatterns = [
     path('shared/<uuid:token>/', views.access_shared_file, name='access_shared_file'),
     path('shared-files/', views.list_shared_files, name='list_shared_files'),
     path('delete-file/<int:file_id>/', views.delete_file, name='delete_file'),
+    path('revoke-access/<int:file_id>/', views.revoke_file_access, name='revoke_file_access'),
+    path('expire-link/<uuid:link_id>/', views.expire_share_link, name='expire_share_link'),
 ]

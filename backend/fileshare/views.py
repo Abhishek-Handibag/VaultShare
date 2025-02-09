@@ -266,10 +266,13 @@ def upload_file(request):
 @authentication_classes([CookieJWTAuthentication])
 def download_file(request, file_id):
     try:
-        file_obj = File.objects.get(id=file_id, owner=request.user)
+        file_obj = get_object_or_404(File, id=file_id)
         password = request.GET.get('password')
         
-        if not password:
+        # Skip password check for file owner
+        if file_obj.can_access_without_password(request.user):
+            password = request.GET.get('password', '')  # Use empty password for owner
+        elif not password:
             return JsonResponse({'error': 'Password is required'}, status=400)
             
         try:
@@ -298,10 +301,26 @@ def download_file(request, file_id):
 @permission_classes([IsAuthenticated])
 @authentication_classes([CookieJWTAuthentication])
 def list_files(request):
-    files = File.objects.filter(owner=request.user).values(
-        'id', 'file_name', 'file_size', 'uploaded_at'
-    )
-    return JsonResponse({'files': list(files)})
+    # Get files owned by user
+    owned_files = File.objects.filter(owner=request.user)
+    owned_files_data = [file.get_complete_info() for file in owned_files]
+
+    # Get files shared with user
+    shared_files = FileShare.objects.filter(shared_with=request.user).select_related('file')
+    shared_files_data = [{
+        'id': share.file.id,
+        'file_name': share.file.file_name,
+        'file_size': share.file.file_size,
+        'uploaded_at': share.file.uploaded_at,
+        'owner': share.file.owner.email,
+        'is_owner': False,
+        'permission': share.permission
+    } for share in shared_files]
+
+    return JsonResponse({
+        'owned_files': owned_files_data,
+        'shared_files': shared_files_data
+    })
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -421,5 +440,30 @@ def delete_file(request, file_id):
         # Delete the database record
         file.delete()
         return JsonResponse({'message': 'File deleted successfully'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([CookieJWTAuthentication])
+def revoke_file_access(request, file_id):
+    try:
+        file = get_object_or_404(File, id=file_id, owner=request.user)
+        data = json.loads(request.body)
+        email = data.get('email')
+        
+        file.revoke_access(email)
+        return JsonResponse({'message': 'Access revoked successfully'})
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([CookieJWTAuthentication])
+def expire_share_link(request, link_id):
+    try:
+        share_link = get_object_or_404(FileShareLink, id=link_id, file__owner=request.user)
+        share_link.expire_link()
+        return JsonResponse({'message': 'Link expired successfully'})
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
