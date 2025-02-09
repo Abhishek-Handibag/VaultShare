@@ -4,6 +4,7 @@ import CssBaseline from '@mui/material/CssBaseline';
 import Login from './components/Login';
 import Register from './components/Register';
 import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
 import Dashboard from './components/Dashboard';
 import SharedFile from './components/SharedFile';
 import logo from './logo.svg';
@@ -34,6 +35,7 @@ function App() {
             <Route path="/" element={<Login />} />
             <Route path="/register" element={<Register />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/shared/:token" element={<SharedFile />} />
           </Routes>
