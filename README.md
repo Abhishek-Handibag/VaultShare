@@ -54,5 +54,75 @@
 
 ### Local Development Setup
 
-#### Backend Setup
-1. Create and activate Python virtual environment:
+# Installation Guide
+
+## Backend Setup
+
+1. Navigate to the backend directory:
+```bash
+cd backend
+```
+
+2. Create a Python virtual environment:
+```bash
+# Windows
+python -m venv venv
+
+# Linux/MacOS
+python3 -m venv venv
+```
+
+3. Activate the virtual environment:
+```bash
+# Windows
+venv\Scripts\activate
+
+# Linux/MacOS
+source venv/bin/activate
+```
+
+4. Install the required Python packages:
+```bash
+pip install -r requirements.txt
+```
+
+5. Set up the database:
+```bash
+python manage.py migrate
+```
+
+6. Create a superuser (optional):
+```bash
+python manage.py createsuperuser
+```
+
+7. Start the Django development server:
+```bash
+python manage.py runserver
+```
+
+The backend server will start running at `http://localhost:8000`
+
+## Frontend Setup
+
+1. Navigate to the frontend directory:
+```bash
+cd frontend
+```
+
+2. Install Node.js dependencies:
+```bash
+npm install
+```
+
+3. Create a `.env` file in the frontend directory with the following content:
+```env
+REACT_APP_API_URL=http://localhost:8000/api
+```
+
+4. Start the development server:
+```bash
+npm start
+```
+
+The frontend application will start running at `http://localhost:3000`
