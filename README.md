@@ -41,12 +41,18 @@
 
 ## 🚀 Getting Started
 
+### Prerequisites
+- Node.js >= 16
+- Python >= 3.11
+- npm or yarn
+- pip
+
 ### 🐳 Docker Setup
 1. Make sure you have Docker and Docker Compose installed
 2. Clone the repository
 3. Run the following commands:
 
-### Local Development Setup (Uses SQLite)
+### Local Development Setup
 
 #### Backend Setup
-1. Create a virtual environment and activate it:
+1. Create and activate Python virtual environment:
