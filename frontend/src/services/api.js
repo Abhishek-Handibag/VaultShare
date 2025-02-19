@@ -320,3 +320,22 @@ export const logoutThunk = createAsyncThunk(
         }
     }
 );
+
+export const verifyAuthThunk = createAsyncThunk(
+    'auth/verifyAuth',
+    async (_, { dispatch, rejectWithValue }) => {
+        try {
+            const response = await verifyAuth();
+            if (response.isAuthenticated && response.user) {
+                dispatch(setAuthenticated(response.user));
+                return response.user;
+            } else {
+                dispatch(setNotAuthenticated());
+                return rejectWithValue('Not authenticated');
+            }
+        } catch (error) {
+            dispatch(setNotAuthenticated());
+            return rejectWithValue(error.message);
+        }
+    }
+);

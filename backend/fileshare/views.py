@@ -218,7 +218,14 @@ def logout(request):
 @permission_classes([IsAuthenticated])
 @authentication_classes([CookieJWTAuthentication])
 def verify_auth(request):
-    return JsonResponse({'isAuthenticated': True})
+    user = request.user
+    return JsonResponse({
+        'isAuthenticated': True,
+        'user': {
+            'email': user.email,
+            'name': user.first_name
+        }
+    })
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
