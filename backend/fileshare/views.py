@@ -103,8 +103,8 @@ def login(request):
             # Send OTP via email
             send_mail(
                 'Login OTP',
-                f'Your OTP is: {otp}',
-                'handibag.developer@gmail.com',
+                f'Dear user,\n\nYour one-time password (OTP) for login is: {otp}.\n\nPlease use this code to proceed. Do not share it with anyone for security reasons.\n\nBest regards,\nAbhishek Handibag',
+                '',
                 [email],
                 fail_silently=False,
             )
