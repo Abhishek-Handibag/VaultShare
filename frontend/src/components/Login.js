@@ -4,6 +4,7 @@ import { Box, Container, TextField, Button, Typography, Paper, CircularProgress,
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { useDispatch, useSelector } from 'react-redux';
 import { loginThunk, verifyOtpThunk } from '../services/api';
+import CustomSnackbar from './common/CustomSnackbar';
 
 function Login() {
   const dispatch = useDispatch();
@@ -18,6 +19,11 @@ function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [showOtpField, setShowOtpField] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'error'
+  });
 
   React.useEffect(() => {
     // Simulate initial page load
@@ -58,6 +64,10 @@ function Login() {
     }
   };
 
+  const handleSnackbarClose = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -72,7 +82,17 @@ function Login() {
 
         if (result.message === 'OTP sent to email') {
           setShowOtpField(true);
-          setErrors({ success: 'OTP sent successfully to your email!' });
+          setSnackbar({
+            open: true,
+            message: 'OTP sent successfully to your email!',
+            severity: 'success'
+          });
+        } else if (result.error) {
+          setSnackbar({
+            open: true,
+            message: result.error,
+            severity: 'error'
+          });
         }
       } else {
         const result = await dispatch(verifyOtpThunk({
@@ -81,13 +101,31 @@ function Login() {
         })).unwrap();
 
         if (result.success) {
-          setErrors({ success: 'Login successful! Redirecting...' });
+          setSnackbar({
+            open: true,
+            message: 'Login successful! Redirecting...',
+            severity: 'success'
+          });
           setTimeout(() => navigate('/dashboard'), 1500);
+        } else {
+          setSnackbar({
+            open: true,
+            message: result.error || 'Invalid OTP',
+            severity: 'error'
+          });
         }
       }
     } catch (error) {
-      setErrors({
-        submit: error.message || 'Network error occurred'
+      let errorMessage = 'Network error occurred';
+      if (error.status === 401) {
+        errorMessage = 'Invalid credentials';
+      } else if (error.status === 400) {
+        errorMessage = error.data?.error || 'Invalid input';
+      }
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: 'error'
       });
     } finally {
       setIsLoading(false);
@@ -240,6 +278,12 @@ function Login() {
           </Box>
         </Paper>
       </Box>
+      <CustomSnackbar
+        open={snackbar.open}
+        onClose={handleSnackbarClose}
+        message={snackbar.message}
+        severity={snackbar.severity}
+      />
     </Container>
   );
 }

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Box, Container, TextField, Button, Typography, Paper, CircularProgress, Alert, Skeleton } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { register } from '../services/api';
+import CustomSnackbar from './common/CustomSnackbar';
 
 function Register() {
   const navigate = useNavigate();
@@ -15,6 +16,11 @@ function Register() {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [pageLoading, setPageLoading] = useState(true);
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'error'
+  });
 
   React.useEffect(() => {
     // Simulate initial page load
@@ -63,6 +69,10 @@ function Register() {
     }
   };
 
+  const handleSnackbarClose = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -76,18 +86,30 @@ function Register() {
       });
 
       if (response.message === 'Registration successful') {
-        setErrors({});
-        // Show success message before navigation
-        setErrors({ success: 'Registration successful! Redirecting...' });
+        setSnackbar({
+          open: true,
+          message: 'Registration successful! Redirecting...',
+          severity: 'success'
+        });
         setTimeout(() => navigate('/'), 1500);
       } else {
-        setErrors({
-          submit: response.error || 'Registration failed'
+        setSnackbar({
+          open: true,
+          message: response.error || 'Registration failed',
+          severity: 'error'
         });
       }
     } catch (error) {
-      setErrors({
-        submit: 'Network error occurred'
+      let errorMessage = 'Network error occurred';
+      if (error.status === 400) {
+        errorMessage = error.data?.error || 'Invalid registration data';
+      } else if (error.status === 409) {
+        errorMessage = 'Email already exists';
+      }
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: 'error'
       });
     } finally {
       setIsLoading(false);
@@ -241,6 +263,12 @@ function Register() {
           </Box>
         </Paper>
       </Box>
+      <CustomSnackbar
+        open={snackbar.open}
+        onClose={handleSnackbarClose}
+        message={snackbar.message}
+        severity={snackbar.severity}
+      />
     </Container>
   );
 }
