@@ -1,4 +1,4 @@
-[![Build Status](https://img.shields.io/github/actions/workflow/status/Abhishek-Handibag/Secure-share-hub/ci.yml?style=flat&logo=github)](https://github.com/Abhishek-Handibag/Secure-share-hub/actions) ![Docker Image](https://img.shields.io/docker/build/abhishekhandibag/secure-share-hub?style=flat&logo=docker) ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
 
 ## 🔒 Secure Share Hub
