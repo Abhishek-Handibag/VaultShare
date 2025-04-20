@@ -1,9 +1,9 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
 
-## 🔒 Secure Share Hub
+## 🔒 VaultShare (A Secure Share Hub)
 
-Secure Share Hub is a modern, secure file‑sharing application designed to provide **end‑to‑end encryption**, **password‑protected access**, and **flexible sharing controls**. Built with a React front end and a Django REST back end, the entire stack is containerized with Docker for seamless deployment.
+VaultShare is a modern, secure file‑sharing application designed to provide **end‑to‑end encryption**, **password‑protected access**, and **flexible sharing controls**. Built with a React front end and a Django REST back end, the entire stack is containerized with Docker for seamless deployment.
 
 ---
 
@@ -77,13 +77,8 @@ Secure Share Hub is a modern, secure file‑sharing application designed to prov
 2. **Copy environment examples**:
    ```bash
    cp backend/.env.example backend/.env
-   cp frontend/.env.example frontend/.env
    ```
-3. **Start with Docker Compose**:
-   ```bash
-   docker-compose up --build
-   ```
-4. **Access**:
+3. **Access**:
    - Frontend: `http://localhost:3000`
    - Backend API: `http://localhost:8000/api`
 
