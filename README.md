@@ -496,3 +496,12 @@ copies or substantial portions of the Software.
 
 ---
 
+## 🙏 Acknowledgments
+
+- [Django](https://www.djangoproject.com/) - High-level Python web framework
+- [React](https://reactjs.org/) - JavaScript library for building UIs
+- [Material-UI](https://mui.com/) - React component library
+- [Cryptography](https://cryptography.io/) - Python cryptography library
+- [Docker](https://www.docker.com/) - Containerization platform
+
+---
