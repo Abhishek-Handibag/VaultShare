@@ -487,15 +487,6 @@ copies or substantial portions of the Software.
 
 ---
 
-## 📧 Contact
-
-**Abhishek Handibag**
-
-- GitHub: [@Abhishek-Handibag](https://github.com/Abhishek-Handibag)
-- Project Link: [https://github.com/Abhishek-Handibag/VaultShare](https://github.com/Abhishek-Handibag/VaultShare)
-
----
-
 ## 🙏 Acknowledgments
 
 - [Django](https://www.djangoproject.com/) - High-level Python web framework
@@ -505,3 +496,11 @@ copies or substantial portions of the Software.
 - [Docker](https://www.docker.com/) - Containerization platform
 
 ---
+
+<div align="center">
+
+**⭐ Star this repository if you find it helpful!**
+
+Made with ❤️ by [Abhishek Handibag](https://github.com/Abhishek-Handibag)
+
+</div>
